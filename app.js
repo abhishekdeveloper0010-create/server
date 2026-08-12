@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const path =  require("path");
+
 require("dotenv").config();
 
 require("./config/db");
@@ -15,6 +17,7 @@ app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
+app.use("/images",express.static(path.join(__dirname, "uploads/products")));
 
 createUsersTable();
 
