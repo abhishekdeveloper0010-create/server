@@ -15,7 +15,7 @@ const {
 } = require("../controllers/orderController");
 
 // =====================================================
-// AUTH
+// AUTH MIDDLEWARE
 // =====================================================
 
 const {
@@ -67,7 +67,7 @@ router.post(
 );
 
 // =====================================================
-// RETURN ORDER ITEM
+// RETURN SINGLE ITEM
 // POST /api/orders/:orderId/items/:itemId/return
 // =====================================================
 

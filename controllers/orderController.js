@@ -8,12 +8,18 @@ const {
   getUserOrderById,
   requestReturn,
 } = require("../models/orderModel");
+
 // =====================================================
 // HELPER: GET USER ID
 // =====================================================
 
 const getUserId = (req) => {
-  return req.user?.id || req.user?.user_id || null;
+  return (
+    req.user?.id ||
+    req.user?.user_id ||
+    req.user?.userId ||
+    null
+  );
 };
 
 // =====================================================
@@ -26,6 +32,11 @@ exports.placeOrder = async (req, res) => {
 
   try {
     const userId = getUserId(req);
+
+    console.log("=================================");
+    console.log("CREATE ORDER USER:", userId);
+    console.log("ORDER BODY:", req.body);
+    console.log("=================================");
 
     if (!userId) {
       return res.status(401).json({
@@ -45,9 +56,9 @@ exports.placeOrder = async (req, res) => {
       address_id,
     } = req.body;
 
-    // ===================================================
+    // =================================================
     // VALIDATE ITEMS
-    // ===================================================
+    // =================================================
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -56,18 +67,21 @@ exports.placeOrder = async (req, res) => {
       });
     }
 
-    // ===================================================
+    // =================================================
     // ADDRESS
-    // ===================================================
+    // =================================================
 
     const finalAddressId =
-      addressId || address_id || null;
+      addressId ||
+      address_id ||
+      null;
 
-    // ===================================================
+    // =================================================
     // AMOUNTS
-    // ===================================================
+    // =================================================
 
-    const finalSubtotal = Number(subtotal || 0);
+    const finalSubtotal =
+      Number(subtotal || 0);
 
     const finalDeliveryCharge =
       Number(deliveryCharge || 0);
@@ -79,49 +93,40 @@ exports.placeOrder = async (req, res) => {
           finalSubtotal + finalDeliveryCharge
       );
 
-    // ===================================================
+    // =================================================
     // PAYMENT
-    // ===================================================
+    // =================================================
 
     const finalPaymentMethod =
       paymentMethod || "COD";
 
-    // ===================================================
+    // =================================================
     // ORDER NUMBER
-    // ===================================================
+    // =================================================
 
     const orderNumber =
       `AB-${Date.now()}-${Math.floor(
         1000 + Math.random() * 9000
       )}`;
 
-    // ===================================================
-    // GET CONNECTION
-    // ===================================================
+    // =================================================
+    // DATABASE CONNECTION
+    // IMPORTANT:
+    // db.js uses mysql.createConnection()
+    // So DO NOT use db.getConnection()
+    // =================================================
 
-    connection = await new Promise(
-      (resolve, reject) => {
-        db.getConnection(
-          (error, conn) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(conn);
-            }
-          }
-        );
-      }
-    );
+    connection = db.promise();
 
-    // ===================================================
+    // =================================================
     // START TRANSACTION
-    // ===================================================
+    // =================================================
 
     await connection.beginTransaction();
 
-    // ===================================================
+    // =================================================
     // CREATE ORDER
-    // ===================================================
+    // =================================================
 
     const orderId = await createOrder(
       connection,
@@ -130,26 +135,22 @@ exports.placeOrder = async (req, res) => {
         userId,
         status: "Order Placed",
         subtotal: finalSubtotal,
-        deliveryCharge:
-          finalDeliveryCharge,
-        totalAmount:
-          finalTotalAmount,
-        paymentMethod:
-          finalPaymentMethod,
-        addressId:
-          finalAddressId,
+        deliveryCharge: finalDeliveryCharge,
+        totalAmount: finalTotalAmount,
+        paymentMethod: finalPaymentMethod,
+        addressId: finalAddressId,
       }
     );
 
-    // ===================================================
+    // =================================================
     // CREATE ORDER ITEMS
-    // ===================================================
+    // =================================================
 
     for (const item of items) {
       const productId =
-        item.productId ||
-        item.product_id ||
-        item.id ||
+        item.productId ??
+        item.product_id ??
+        item.id ??
         null;
 
       const productName =
@@ -167,19 +168,21 @@ exports.placeOrder = async (req, res) => {
         item.image_url ||
         null;
 
-      const price = Number(
-        item.price ||
-          item.currentPrice ||
-          item.current_price ||
-          item.amount ||
+      const price =
+        Number(
+          item.price ??
+          item.currentPrice ??
+          item.current_price ??
+          item.amount ??
           0
-      );
+        );
 
-      const quantity = Number(
-        item.quantity ||
-          item.qty ||
+      const quantity =
+        Number(
+          item.quantity ??
+          item.qty ??
           1
-      );
+        );
 
       const size =
         item.size || null;
@@ -202,9 +205,9 @@ exports.placeOrder = async (req, res) => {
       );
     }
 
-    // ===================================================
-    // CREATE STATUS HISTORY
-    // ===================================================
+    // =================================================
+    // STATUS HISTORY
+    // =================================================
 
     await createStatusHistory(
       connection,
@@ -216,44 +219,81 @@ exports.placeOrder = async (req, res) => {
       }
     );
 
-    // ===================================================
+    // =================================================
     // COMMIT
-    // ===================================================
+    // =================================================
 
     await connection.commit();
 
-    // ===================================================
+    console.log(
+      "ORDER CREATED:",
+      orderId,
+      orderNumber
+    );
+
+    // =================================================
     // RESPONSE
-    // ===================================================
+    // =================================================
 
     return res.status(201).json({
       success: true,
-      message:
-        "Order placed successfully",
+      message: "Order placed successfully",
+
       order: {
         id: orderId,
-        orderNumber,
-        order_number: orderNumber,
-        userId,
-        user_id: userId,
-        status: "Order Placed",
-        subtotal: finalSubtotal,
+
+        orderNumber:
+          orderNumber,
+
+        order_number:
+          orderNumber,
+
+        userId:
+          userId,
+
+        user_id:
+          userId,
+
+        status:
+          "Order Placed",
+
+        subtotal:
+          finalSubtotal,
+
         deliveryCharge:
           finalDeliveryCharge,
+
+        delivery_charge:
+          finalDeliveryCharge,
+
         total:
           finalTotalAmount,
+
         totalAmount:
           finalTotalAmount,
+
+        total_amount:
+          finalTotalAmount,
+
         paymentMethod:
           finalPaymentMethod,
+
+        payment_method:
+          finalPaymentMethod,
+
         addressId:
+          finalAddressId,
+
+        address_id:
           finalAddressId,
       },
     });
+
   } catch (error) {
-    // ===================================================
+
+    // =================================================
     // ROLLBACK
-    // ===================================================
+    // =================================================
 
     if (connection) {
       try {
@@ -276,10 +316,12 @@ exports.placeOrder = async (req, res) => {
       message: "Failed to place order",
       error: error.message,
     });
+
   } finally {
-    if (connection) {
-      connection.release();
-    }
+
+    // IMPORTANT:
+    // mysql.createConnection() does NOT have release()
+    // So nothing is required here.
   }
 };
 
@@ -287,26 +329,17 @@ exports.placeOrder = async (req, res) => {
 // GET MY ORDERS
 // GET /api/orders/my-orders
 // =====================================================
- 
 
 exports.getMyOrders = async (req, res) => {
   try {
-    const userId =
-      req.user?.id ||
-      req.user?.user_id;
+    const userId = getUserId(req);
 
-    console.log(
-      "================================="
-    );
-
+    console.log("=================================");
     console.log(
       "GET MY ORDERS USER ID:",
       userId
     );
-
-    console.log(
-      "================================="
-    );
+    console.log("=================================");
 
     if (!userId) {
       return res.status(401).json({
@@ -320,15 +353,26 @@ exports.getMyOrders = async (req, res) => {
       await getUserOrders(userId);
 
     console.log(
-      "ORDERS RETURNED TO CONTROLLER:",
+      "ORDERS RETURNED:",
       orders.length
+    );
+
+    console.log(
+      "ORDERS FROM SERVER:",
+      JSON.stringify(
+        orders,
+        null,
+        2
+      )
     );
 
     return res.status(200).json({
       success: true,
       orders,
     });
+
   } catch (error) {
+
     console.error(
       "GET MY ORDERS ERROR:",
       error
@@ -336,8 +380,10 @@ exports.getMyOrders = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to load orders",
-      error: error.message,
+      message:
+        "Failed to load orders",
+      error:
+        error.message,
     });
   }
 };
@@ -349,13 +395,10 @@ exports.getMyOrders = async (req, res) => {
 
 exports.getOrder = async (req, res) => {
   try {
-    const userId =
-      req.user?.id ||
-      req.user?.user_id;
+    const userId = getUserId(req);
 
-    const orderId = Number(
-      req.params.id
-    );
+    const orderId =
+      Number(req.params.id);
 
     if (!userId) {
       return res.status(401).json({
@@ -368,7 +411,8 @@ exports.getOrder = async (req, res) => {
     if (!orderId) {
       return res.status(400).json({
         success: false,
-        message: "Invalid order ID",
+        message:
+          "Invalid order ID",
       });
     }
 
@@ -381,7 +425,8 @@ exports.getOrder = async (req, res) => {
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: "Order not found",
+        message:
+          "Order not found",
       });
     }
 
@@ -389,7 +434,9 @@ exports.getOrder = async (req, res) => {
       success: true,
       order,
     });
+
   } catch (error) {
+
     console.error(
       "GET SINGLE ORDER ERROR:",
       error
@@ -399,27 +446,25 @@ exports.getOrder = async (req, res) => {
       success: false,
       message:
         "Failed to load order",
-      error: error.message,
+      error:
+        error.message,
     });
   }
 };
+
 // =====================================================
 // CANCEL ORDER
 // POST /api/orders/:id/cancel
 // =====================================================
 
-exports.cancelOrder = async (
-  req,
-  res
-) => {
+exports.cancelOrder = async (req, res) => {
   let connection;
 
   try {
     const userId = getUserId(req);
 
-    const orderId = Number(
-      req.params.id
-    );
+    const orderId =
+      Number(req.params.id);
 
     const reason =
       req.body?.reason ||
@@ -437,13 +482,14 @@ exports.cancelOrder = async (
     if (!orderId) {
       return res.status(400).json({
         success: false,
-        message: "Invalid order ID",
+        message:
+          "Invalid order ID",
       });
     }
 
-    // ===================================================
+    // =================================================
     // GET ORDER
-    // ===================================================
+    // =================================================
 
     const order =
       await getUserOrderById(
@@ -454,13 +500,14 @@ exports.cancelOrder = async (
     if (!order) {
       return res.status(404).json({
         success: false,
-        message: "Order not found",
+        message:
+          "Order not found",
       });
     }
 
-    // ===================================================
-    // CHECK STATUS
-    // ===================================================
+    // =================================================
+    // CANCEL RULE
+    // =================================================
 
     const nonCancelableStatuses = [
       "Cancelled",
@@ -482,29 +529,19 @@ exports.cancelOrder = async (
       });
     }
 
-    // ===================================================
-    // CONNECTION
-    // ===================================================
+    // =================================================
+    // DATABASE CONNECTION
+    // IMPORTANT:
+    // db.getConnection() NOT AVAILABLE
+    // =================================================
 
-    connection = await new Promise(
-      (resolve, reject) => {
-        db.getConnection(
-          (error, conn) => {
-            if (error) {
-              reject(error);
-            } else {
-              resolve(conn);
-            }
-          }
-        );
-      }
-    );
+    connection = db.promise();
 
     await connection.beginTransaction();
 
-    // ===================================================
+    // =================================================
     // UPDATE ORDER
-    // ===================================================
+    // =================================================
 
     await connection.execute(
       `
@@ -524,9 +561,9 @@ exports.cancelOrder = async (
       ]
     );
 
-    // ===================================================
+    // =================================================
     // UPDATE ITEMS
-    // ===================================================
+    // =================================================
 
     await connection.execute(
       `
@@ -537,9 +574,9 @@ exports.cancelOrder = async (
       [orderId]
     );
 
-    // ===================================================
+    // =================================================
     // HISTORY
-    // ===================================================
+    // =================================================
 
     await createStatusHistory(
       connection,
@@ -551,6 +588,10 @@ exports.cancelOrder = async (
       }
     );
 
+    // =================================================
+    // COMMIT
+    // =================================================
+
     await connection.commit();
 
     return res.json({
@@ -558,11 +599,14 @@ exports.cancelOrder = async (
       message:
         "Order cancelled successfully",
       orderId,
-      status: "Cancelled",
+      status:
+        "Cancelled",
       cancellationReason:
         reason,
     });
+
   } catch (error) {
+
     if (connection) {
       try {
         await connection.rollback();
@@ -583,17 +627,19 @@ exports.cancelOrder = async (
       success: false,
       message:
         "Failed to cancel order",
-      error: error.message,
+      error:
+        error.message,
     });
+
   } finally {
-    if (connection) {
-      connection.release();
-    }
+
+    // mysql.createConnection()
+    // does not support release()
   }
 };
 
 // =====================================================
-// RETURN ORDER ITEM
+// RETURN ITEM
 // POST /api/orders/:orderId/items/:itemId/return
 // =====================================================
 
@@ -603,20 +649,16 @@ exports.returnOrderItem = async (
 ) => {
   try {
     const userId =
-      req.user?.id ||
-      req.user?.user_id;
+      getUserId(req);
 
-    const orderId = Number(
-      req.params.orderId
-    );
+    const orderId =
+      Number(req.params.orderId);
 
-    const itemId = Number(
-      req.params.itemId
-    );
+    const itemId =
+      Number(req.params.itemId);
 
-    const {
-      reason,
-    } = req.body;
+    const reason =
+      req.body?.reason;
 
     if (!userId) {
       return res.status(401).json({
@@ -643,20 +685,26 @@ exports.returnOrderItem = async (
     }
 
     const result =
-      await requestReturn(null, {
-        userId,
-        orderId,
-        itemId,
-        reason,
-      });
+      await requestReturn(
+        null,
+        {
+          userId,
+          orderId,
+          itemId,
+          reason,
+        }
+      );
 
     return res.status(200).json({
       success: true,
       message:
         "Return request submitted successfully",
-      returnRequest: result,
+      returnRequest:
+        result,
     });
+
   } catch (error) {
+
     console.error(
       "RETURN ORDER ITEM ERROR:",
       error

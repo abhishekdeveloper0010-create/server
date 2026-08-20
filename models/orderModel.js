@@ -26,37 +26,40 @@ const createOrder = async (
     addressId,
   }
 ) => {
+
   const conn =
-    connection && typeof connection.execute === "function"
+    connection &&
+    typeof connection.execute === "function"
       ? connection
       : promiseDb;
 
-  const [result] = await conn.execute(
-    `
-      INSERT INTO orders
-      (
-        order_number,
-        user_id,
+  const [result] =
+    await conn.execute(
+      `
+        INSERT INTO orders
+        (
+          order_number,
+          user_id,
+          status,
+          subtotal,
+          delivery_charge,
+          total_amount,
+          payment_method,
+          address_id
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        orderNumber,
+        userId,
         status,
         subtotal,
-        delivery_charge,
-        total_amount,
-        payment_method,
-        address_id
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      orderNumber,
-      userId,
-      status,
-      subtotal,
-      deliveryCharge,
-      totalAmount,
-      paymentMethod || null,
-      addressId || null,
-    ]
-  );
+        deliveryCharge,
+        totalAmount,
+        paymentMethod || null,
+        addressId || null,
+      ]
+    );
 
   return result.insertId;
 };
@@ -78,39 +81,42 @@ const createOrderItem = async (
     color,
   }
 ) => {
+
   const conn =
-    connection && typeof connection.execute === "function"
+    connection &&
+    typeof connection.execute === "function"
       ? connection
       : promiseDb;
 
-  const [result] = await conn.execute(
-    `
-      INSERT INTO order_items
-      (
-        order_id,
-        product_id,
-        product_name,
-        product_image,
+  const [result] =
+    await conn.execute(
+      `
+        INSERT INTO order_items
+        (
+          order_id,
+          product_id,
+          product_name,
+          product_image,
+          price,
+          quantity,
+          size,
+          color,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        orderId,
+        productId,
+        productName,
+        productImage || null,
         price,
         quantity,
-        size,
-        color,
-        status
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      orderId,
-      productId,
-      productName,
-      productImage || null,
-      price,
-      quantity,
-      size || null,
-      color || null,
-      "Order Placed",
-    ]
-  );
+        size || null,
+        color || null,
+        "Order Placed",
+      ]
+    );
 
   return result.insertId;
 };
@@ -127,8 +133,10 @@ const createStatusHistory = async (
     message,
   }
 ) => {
+
   const conn =
-    connection && typeof connection.execute === "function"
+    connection &&
+    typeof connection.execute === "function"
       ? connection
       : promiseDb;
 
@@ -154,49 +162,54 @@ const createStatusHistory = async (
 // GET USER ORDERS
 // =====================================================
 
-const getUserOrders = async (userId) => {
-  // ---------------------------------------------------
-  // GET ORDERS
-  // ---------------------------------------------------
+const getUserOrders = async (
+  userId
+) => {
 
-  const [orders] = await promiseDb.execute(
-    `
-      SELECT
-        o.id,
-        o.order_number,
-        o.user_id,
-        o.status,
-        o.subtotal,
-        o.delivery_charge,
-        o.total_amount,
-        o.payment_method,
-        o.address_id,
-        o.cancellation_reason,
-        o.cancelled_at,
-        o.created_at,
-        o.updated_at,
+  // ===================================================
+  // ORDERS
+  // ===================================================
 
-        a.id AS saved_address_id,
-        a.full_name,
-        a.email,
-        a.phone,
-        a.address_line,
-        a.city,
-        a.state,
-        a.pincode,
-        a.country
+  const [orders] =
+    await promiseDb.execute(
+      `
+        SELECT
+          o.id,
+          o.order_number,
+          o.user_id,
+          o.status,
+          o.subtotal,
+          o.delivery_charge,
+          o.total_amount,
+          o.payment_method,
+          o.address_id,
+          o.cancellation_reason,
+          o.cancelled_at,
+          o.created_at,
+          o.updated_at,
 
-      FROM orders o
+          a.id AS saved_address_id,
+          a.full_name,
+          a.email,
+          a.phone,
+          a.address_line,
+          a.city,
+          a.state,
+          a.pincode,
+          a.country
 
-      LEFT JOIN addresses a
-        ON o.address_id = a.id
+        FROM orders o
 
-      WHERE o.user_id = ?
+        LEFT JOIN addresses a
+          ON o.address_id = a.id
 
-      ORDER BY o.created_at DESC
-    `,
-    [userId]
-  );
+        WHERE o.user_id = ?
+
+        ORDER BY
+          o.created_at DESC
+      `,
+      [userId]
+    );
 
   console.log(
     "MODEL ORDERS FOR USER:",
@@ -205,296 +218,325 @@ const getUserOrders = async (userId) => {
     orders.length
   );
 
-  // ---------------------------------------------------
+  // ===================================================
   // NO ORDERS
-  // ---------------------------------------------------
+  // ===================================================
 
-  if (!orders || orders.length === 0) {
+  if (
+    !orders ||
+    orders.length === 0
+  ) {
     return [];
   }
 
-  // ---------------------------------------------------
+  // ===================================================
   // ORDER IDS
-  // ---------------------------------------------------
+  // ===================================================
 
-  const orderIds = orders.map(
-    (order) => order.id
-  );
+  const orderIds =
+    orders.map(
+      (order) => order.id
+    );
 
-  const placeholders = orderIds
-    .map(() => "?")
-    .join(",");
-
-  // ---------------------------------------------------
-  // GET ORDER ITEMS
-  // ---------------------------------------------------
-
-  const [items] = await promiseDb.execute(
-    `
-      SELECT
-        id,
-        order_id,
-        product_id,
-        product_name,
-        product_image,
-        price,
-        quantity,
-        size,
-        color,
-        status,
-        rma_requested,
-        rma_reason,
-        rma_status,
-        rma_requested_at,
-        return_pickup_date,
-        returned_at,
-        refund_amount,
-        created_at
-
-      FROM order_items
-
-      WHERE order_id IN (${placeholders})
-
-      ORDER BY id ASC
-    `,
+  const placeholders =
     orderIds
-  );
+      .map(() => "?")
+      .join(",");
 
-  // ---------------------------------------------------
-  // FORMAT
-  // ---------------------------------------------------
+  // ===================================================
+  // ITEMS
+  // ===================================================
 
-  const formattedOrders = orders.map(
-    (order) => {
-      const orderItems = items
-        .filter(
-          (item) =>
-            Number(item.order_id) ===
-            Number(order.id)
-        )
-        .map((item) => ({
-          id: item.id,
+  const [items] =
+    await promiseDb.execute(
+      `
+        SELECT
+          id,
+          order_id,
+          product_id,
+          product_name,
+          product_image,
+          price,
+          quantity,
+          size,
+          color,
+          status,
+          rma_requested,
+          rma_reason,
+          rma_status,
+          rma_requested_at,
+          return_pickup_date,
+          returned_at,
+          refund_amount,
+          created_at
 
-          orderId: item.order_id,
-          order_id: item.order_id,
+        FROM order_items
 
-          productId: item.product_id,
-          product_id: item.product_id,
+        WHERE order_id IN (${placeholders})
 
-          name: item.product_name,
-          productName: item.product_name,
-          product_name: item.product_name,
+        ORDER BY id ASC
+      `,
+      orderIds
+    );
 
-          image: item.product_image,
-          productImage: item.product_image,
-          product_image: item.product_image,
+  // ===================================================
+  // FORMAT ORDERS
+  // ===================================================
 
-          price: Number(item.price || 0),
+  const formattedOrders =
+    orders.map(
+      (order) => {
 
-          quantity: Number(
-            item.quantity || 1
-          ),
+        const orderItems =
+          items
+            .filter(
+              (item) =>
+                Number(item.order_id) ===
+                Number(order.id)
+            )
+            .map(
+              (item) => ({
+                id:
+                  item.id,
 
-          size: item.size || "",
-          color: item.color || "",
+                orderId:
+                  item.order_id,
+
+                order_id:
+                  item.order_id,
+
+                productId:
+                  item.product_id,
+
+                product_id:
+                  item.product_id,
+
+                name:
+                  item.product_name,
+
+                productName:
+                  item.product_name,
+
+                product_name:
+                  item.product_name,
+
+                image:
+                  item.product_image,
+
+                productImage:
+                  item.product_image,
+
+                product_image:
+                  item.product_image,
+
+                price:
+                  Number(
+                    item.price || 0
+                  ),
+
+                quantity:
+                  Number(
+                    item.quantity || 1
+                  ),
+
+                size:
+                  item.size || "",
+
+                color:
+                  item.color || "",
+
+                status:
+                  item.status ||
+                  order.status ||
+                  "Order Placed",
+
+                rmaRequested:
+                  Boolean(
+                    item.rma_requested
+                  ),
+
+                rmaReason:
+                  item.rma_reason || "",
+
+                rmaStatus:
+                  item.rma_status || "",
+
+                rmaRequestedAt:
+                  item.rma_requested_at || "",
+
+                returnPickupDate:
+                  item.return_pickup_date || "",
+
+                returnedAt:
+                  item.returned_at || "",
+
+                refundAmount:
+                  item.refund_amount !== null
+                    ? Number(
+                        item.refund_amount
+                      )
+                    : null,
+              })
+            );
+
+        return {
+
+          id:
+            order.id,
+
+          orderNumber:
+            order.order_number,
+
+          order_number:
+            order.order_number,
+
+          userId:
+            order.user_id,
+
+          user_id:
+            order.user_id,
 
           status:
-            item.status ||
             order.status ||
             "Order Placed",
 
-          rmaRequested: Boolean(
-            item.rma_requested
-          ),
+          subtotal:
+            Number(
+              order.subtotal || 0
+            ),
 
-          rma_requested: Boolean(
-            item.rma_requested
-          ),
+          deliveryCharge:
+            Number(
+              order.delivery_charge || 0
+            ),
 
-          rmaReason:
-            item.rma_reason || "",
+          delivery_charge:
+            Number(
+              order.delivery_charge || 0
+            ),
 
-          rmaStatus:
-            item.rma_status || "",
+          total:
+            Number(
+              order.total_amount || 0
+            ),
 
-          rmaRequestedAt:
-            item.rma_requested_at || "",
+          totalAmount:
+            Number(
+              order.total_amount || 0
+            ),
 
-          returnPickupDate:
-            item.return_pickup_date || "",
+          total_amount:
+            Number(
+              order.total_amount || 0
+            ),
 
-          return_pickup_date:
-            item.return_pickup_date || "",
+          paymentMethod:
+            order.payment_method ||
+            "Not specified",
 
-          returnedAt:
-            item.returned_at || "",
+          payment_method:
+            order.payment_method ||
+            "Not specified",
 
-          refundAmount:
-            item.refund_amount !== null
-              ? Number(item.refund_amount)
+          addressId:
+            order.address_id,
+
+          address_id:
+            order.address_id,
+
+          placedAt:
+            order.created_at,
+
+          createdAt:
+            order.created_at,
+
+          created_at:
+            order.created_at,
+
+          updatedAt:
+            order.updated_at,
+
+          updated_at:
+            order.updated_at,
+
+          cancelledAt:
+            order.cancelled_at || "",
+
+          cancellationReason:
+            order.cancellation_reason || "",
+
+          // ADDRESS
+          address:
+            order.address_line || "",
+
+          address_line:
+            order.address_line || "",
+
+          fullName:
+            order.full_name || "",
+
+          full_name:
+            order.full_name || "",
+
+          email:
+            order.email || "",
+
+          phone:
+            order.phone || "",
+
+          city:
+            order.city || "",
+
+          state:
+            order.state || "",
+
+          pincode:
+            order.pincode || "",
+
+          pin:
+            order.pincode || "",
+
+          country:
+            order.country || "",
+
+          addressDetails:
+            order.saved_address_id
+              ? {
+                  id:
+                    order.saved_address_id,
+
+                  full_name:
+                    order.full_name,
+
+                  email:
+                    order.email,
+
+                  phone:
+                    order.phone,
+
+                  address_line:
+                    order.address_line,
+
+                  city:
+                    order.city,
+
+                  state:
+                    order.state,
+
+                  pincode:
+                    order.pincode,
+
+                  country:
+                    order.country,
+                }
               : null,
-        }));
 
-      return {
-        id: order.id,
-
-        orderNumber:
-          order.order_number,
-
-        order_number:
-          order.order_number,
-
-        userId:
-          order.user_id,
-
-        user_id:
-          order.user_id,
-
-        status:
-          order.status ||
-          "Order Placed",
-
-        subtotal:
-          Number(order.subtotal || 0),
-
-        deliveryCharge:
-          Number(
-            order.delivery_charge || 0
-          ),
-
-        delivery_charge:
-          Number(
-            order.delivery_charge || 0
-          ),
-
-        total:
-          Number(
-            order.total_amount || 0
-          ),
-
-        totalAmount:
-          Number(
-            order.total_amount || 0
-          ),
-
-        total_amount:
-          Number(
-            order.total_amount || 0
-          ),
-
-        paymentMethod:
-          order.payment_method ||
-          "Not specified",
-
-        payment_method:
-          order.payment_method ||
-          "Not specified",
-
-        addressId:
-          order.address_id,
-
-        address_id:
-          order.address_id,
-
-        placedAt:
-          order.created_at,
-
-        createdAt:
-          order.created_at,
-
-        created_at:
-          order.created_at,
-
-        updatedAt:
-          order.updated_at,
-
-        updated_at:
-          order.updated_at,
-
-        cancelledAt:
-          order.cancelled_at || "",
-
-        cancellationReason:
-          order.cancellation_reason ||
-          "",
-
-        // ---------------------------------------------
-        // ADDRESS
-        // ---------------------------------------------
-
-        address:
-          order.address_line || "",
-
-        address_line:
-          order.address_line || "",
-
-        fullName:
-          order.full_name || "",
-
-        full_name:
-          order.full_name || "",
-
-        email:
-          order.email || "",
-
-        phone:
-          order.phone || "",
-
-        city:
-          order.city || "",
-
-        state:
-          order.state || "",
-
-        pincode:
-          order.pincode || "",
-
-        pin:
-          order.pincode || "",
-
-        country:
-          order.country || "",
-
-        addressDetails:
-          order.saved_address_id
-            ? {
-                id:
-                  order.saved_address_id,
-
-                full_name:
-                  order.full_name,
-
-                email:
-                  order.email,
-
-                phone:
-                  order.phone,
-
-                address_line:
-                  order.address_line,
-
-                city:
-                  order.city,
-
-                state:
-                  order.state,
-
-                pincode:
-                  order.pincode,
-
-                country:
-                  order.country,
-              }
-            : null,
-
-        // ---------------------------------------------
-        // ITEMS
-        // ---------------------------------------------
-
-        items: orderItems,
-      };
-    }
-  );
+          // ITEMS
+          items:
+            orderItems,
+        };
+      }
+    );
 
   return formattedOrders;
 };
@@ -507,82 +549,101 @@ const getUserOrderById = async (
   userId,
   orderId
 ) => {
-  const [orders] = await promiseDb.execute(
-    `
-      SELECT
-        o.id,
-        o.order_number,
-        o.user_id,
-        o.status,
-        o.subtotal,
-        o.delivery_charge,
-        o.total_amount,
-        o.payment_method,
-        o.address_id,
-        o.cancellation_reason,
-        o.cancelled_at,
-        o.created_at,
-        o.updated_at,
 
-        a.id AS saved_address_id,
-        a.full_name,
-        a.email,
-        a.phone,
-        a.address_line,
-        a.city,
-        a.state,
-        a.pincode,
-        a.country
+  const [orders] =
+    await promiseDb.execute(
+      `
+        SELECT
+          o.id,
+          o.order_number,
+          o.user_id,
+          o.status,
+          o.subtotal,
+          o.delivery_charge,
+          o.total_amount,
+          o.payment_method,
+          o.address_id,
+          o.cancellation_reason,
+          o.cancelled_at,
+          o.created_at,
+          o.updated_at,
 
-      FROM orders o
+          a.id AS saved_address_id,
+          a.full_name,
+          a.email,
+          a.phone,
+          a.address_line,
+          a.city,
+          a.state,
+          a.pincode,
+          a.country
 
-      LEFT JOIN addresses a
-        ON o.address_id = a.id
+        FROM orders o
 
-      WHERE o.id = ?
-      AND o.user_id = ?
+        LEFT JOIN addresses a
+          ON o.address_id = a.id
 
-      LIMIT 1
-    `,
-    [orderId, userId]
-  );
+        WHERE
+          o.id = ?
+          AND o.user_id = ?
 
-  if (!orders || orders.length === 0) {
+        LIMIT 1
+      `,
+      [
+        orderId,
+        userId,
+      ]
+    );
+
+  if (
+    !orders ||
+    orders.length === 0
+  ) {
     return null;
   }
 
-  const order = orders[0];
+  const order =
+    orders[0];
 
-  const [items] = await promiseDb.execute(
-    `
-      SELECT
-        id,
-        order_id,
-        product_id,
-        product_name,
-        product_image,
-        price,
-        quantity,
-        size,
-        color,
-        status,
-        rma_requested,
-        rma_reason,
-        rma_status,
-        rma_requested_at,
-        return_pickup_date,
-        returned_at,
-        refund_amount,
-        created_at
+  // ===================================================
+  // ITEMS
+  // ===================================================
 
-      FROM order_items
+  const [items] =
+    await promiseDb.execute(
+      `
+        SELECT
+          id,
+          order_id,
+          product_id,
+          product_name,
+          product_image,
+          price,
+          quantity,
+          size,
+          color,
+          status,
+          rma_requested,
+          rma_reason,
+          rma_status,
+          rma_requested_at,
+          return_pickup_date,
+          returned_at,
+          refund_amount,
+          created_at
 
-      WHERE order_id = ?
+        FROM order_items
 
-      ORDER BY id ASC
-    `,
-    [orderId]
-  );
+        WHERE order_id = ?
+
+        ORDER BY id ASC
+      `,
+      [orderId]
+    );
+
+  // ===================================================
+  // HISTORY
+  // ===================================================
 
   const [history] =
     await promiseDb.execute(
@@ -598,33 +659,117 @@ const getUserOrderById = async (
 
         WHERE order_id = ?
 
-        ORDER BY created_at ASC, id ASC
+        ORDER BY
+          created_at ASC,
+          id ASC
       `,
       [orderId]
     );
 
   return {
-    ...order,
+
+    id:
+      order.id,
+
+    orderNumber:
+      order.order_number,
+
+    order_number:
+      order.order_number,
+
+    userId:
+      order.user_id,
+
+    user_id:
+      order.user_id,
+
+    status:
+      order.status,
+
+    subtotal:
+      Number(
+        order.subtotal || 0
+      ),
+
+    deliveryCharge:
+      Number(
+        order.delivery_charge || 0
+      ),
+
+    delivery_charge:
+      Number(
+        order.delivery_charge || 0
+      ),
+
+    total:
+      Number(
+        order.total_amount || 0
+      ),
+
+    totalAmount:
+      Number(
+        order.total_amount || 0
+      ),
+
+    total_amount:
+      Number(
+        order.total_amount || 0
+      ),
+
+    paymentMethod:
+      order.payment_method,
+
+    payment_method:
+      order.payment_method,
+
+    addressId:
+      order.address_id,
+
+    address_id:
+      order.address_id,
+
+    placedAt:
+      order.created_at,
+
+    createdAt:
+      order.created_at,
+
+    updatedAt:
+      order.updated_at,
+
+    cancelledAt:
+      order.cancelled_at || "",
+
+    cancellationReason:
+      order.cancellation_reason || "",
 
     address:
       order.saved_address_id
         ? {
             id:
               order.saved_address_id,
+
             full_name:
               order.full_name,
+
             email:
               order.email,
+
             phone:
               order.phone,
+
             address_line:
               order.address_line,
+
             city:
               order.city,
+
             state:
               order.state,
+
             pincode:
               order.pincode,
+
             country:
               order.country,
           }
@@ -649,56 +794,77 @@ const requestReturn = async (
     reason,
   }
 ) => {
+
   const conn =
     connection &&
     typeof connection.execute === "function"
       ? connection
       : promiseDb;
 
-  const [items] = await conn.execute(
-    `
-      SELECT
-        oi.id,
-        oi.order_id,
-        oi.product_id,
-        oi.product_name,
-        oi.price,
-        oi.quantity,
-        oi.status,
-        oi.rma_requested,
-        oi.rma_status
+  // ===================================================
+  // FIND ITEM
+  // ===================================================
 
-      FROM order_items oi
+  const [items] =
+    await conn.execute(
+      `
+        SELECT
+          oi.id,
+          oi.order_id,
+          oi.product_id,
+          oi.product_name,
+          oi.price,
+          oi.quantity,
+          oi.status,
+          oi.rma_requested,
+          oi.rma_status
 
-      INNER JOIN orders o
-        ON oi.order_id = o.id
+        FROM order_items oi
 
-      WHERE oi.id = ?
-      AND oi.order_id = ?
-      AND o.user_id = ?
+        INNER JOIN orders o
+          ON oi.order_id = o.id
 
-      LIMIT 1
-    `,
-    [
-      itemId,
-      orderId,
-      userId,
-    ]
-  );
+        WHERE
+          oi.id = ?
+          AND oi.order_id = ?
+          AND o.user_id = ?
 
-  if (!items || items.length === 0) {
+        LIMIT 1
+      `,
+      [
+        itemId,
+        orderId,
+        userId,
+      ]
+    );
+
+  if (
+    !items ||
+    items.length === 0
+  ) {
     throw new Error(
       "Order item not found"
     );
   }
 
-  const item = items[0];
+  const item =
+    items[0];
 
-  if (item.status !== "Delivered") {
+  // ===================================================
+  // ONLY DELIVERED
+  // ===================================================
+
+  if (
+    item.status !== "Delivered"
+  ) {
     throw new Error(
       "Only delivered products can be returned"
     );
   }
+
+  // ===================================================
+  // ALREADY REQUESTED
+  // ===================================================
 
   if (
     Number(item.rma_requested) === 1 ||
@@ -708,6 +874,10 @@ const requestReturn = async (
       "Return request already submitted for this product"
     );
   }
+
+  // ===================================================
+  // UPDATE ITEM
+  // ===================================================
 
   await conn.execute(
     `
@@ -719,8 +889,9 @@ const requestReturn = async (
         rma_status = 'Requested',
         rma_requested_at = NOW()
 
-      WHERE id = ?
-      AND order_id = ?
+      WHERE
+        id = ?
+        AND order_id = ?
     `,
     [
       reason,
@@ -728,6 +899,10 @@ const requestReturn = async (
       orderId,
     ]
   );
+
+  // ===================================================
+  // HISTORY
+  // ===================================================
 
   await conn.execute(
     `
@@ -747,11 +922,21 @@ const requestReturn = async (
   );
 
   return {
-    itemId: item.id,
-    orderId: item.order_id,
-    productId: item.product_id,
-    productName: item.product_name,
-    rmaStatus: "Requested",
+
+    itemId:
+      item.id,
+
+    orderId:
+      item.order_id,
+
+    productId:
+      item.product_id,
+
+    productName:
+      item.product_name,
+
+    rmaStatus:
+      "Requested",
   };
 };
 
