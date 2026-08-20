@@ -7,22 +7,20 @@ const mysql2 = require("mysql2");
 const findUserByEmail = (email, callback) => {
   const sql = "SELECT * FROM users WHERE email = ?";
 
-  console.log("SQL:", sql);
+  console.log("FIND USER:", email);
 
   db.query(sql, [email], (err, results) => {
-    console.log(
-      "Final Query:",
-      mysql2.format(sql, [email])
-    );
-
     if (err) {
-      console.log("❌ FIND USER ERROR:", err);
+      console.error("FIND USER ERROR:", err.message);
+      return callback(err, null);
     }
 
-    callback(err, results);
+    console.log("USER QUERY COMPLETE");
+    console.log("USERS FOUND:", results.length);
+
+    callback(null, results);
   });
 };
-
 
 // ==========================================
 // Create new user
@@ -41,9 +39,9 @@ const createUser = (userData, callback) => {
     ],
     (err, result) => {
       if (err) {
-        console.log("❌ MYSQL ERROR:", err);
+        console.log("MYSQL ERROR:", err);
       } else {
-        console.log("✅ USER INSERTED:", result.insertId);
+        console.log("USER INSERTED:", result.insertId);
       }
 
       callback(err, result);

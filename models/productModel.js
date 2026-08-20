@@ -5,7 +5,11 @@ const db = require("../config/db");
 // =====================================================
 
 const getProducts = (callback) => {
-  const sql = "SELECT * FROM products";
+  const sql = `
+    SELECT *
+    FROM products
+    ORDER BY id DESC
+  `;
 
   db.query(sql, callback);
 };
@@ -14,101 +18,116 @@ const getProducts = (callback) => {
 // GET PRODUCTS PAGINATED + SEARCH + CATEGORY
 // =====================================================
 
-const getProductsPaginated = (
+const getProductsPaginated = async (
   page = 1,
   limit = 8,
   search = "",
   category = "",
   callback,
 ) => {
-  const offset = (page - 1) * limit;
+  try {
+    page = Math.max(1, parseInt(page, 10) || 1);
+    limit = Math.max(1, parseInt(limit, 10) || 8);
 
-  let where = "";
+    const offset = (page - 1) * limit;
 
-  const values = [];
+    let where = "";
+    const values = [];
 
-  // ===================================================
-  // SEARCH
-  // ===================================================
+    // =====================================================
+    // SEARCH
+    // =====================================================
 
-  if (search) {
-    where += `
-      WHERE
-        title LIKE ?
-        OR description LIKE ?
-        OR category LIKE ?
-        OR subcategory LIKE ?
-        OR brand LIKE ?
+    if (search) {
+      where = `
+        WHERE
+          title LIKE ?
+          OR description LIKE ?
+          OR category LIKE ?
+          OR subcategory LIKE ?
+          OR brand LIKE ?
+      `;
+
+      const searchValue = `%${search}%`;
+
+      values.push(
+        searchValue,
+        searchValue,
+        searchValue,
+        searchValue,
+        searchValue,
+      );
+    }
+
+    // =====================================================
+    // CATEGORY
+    // =====================================================
+
+    if (category && category !== "All") {
+      if (where) {
+        where += ` AND category = ?`;
+      } else {
+        where = ` WHERE category = ?`;
+      }
+
+      values.push(category);
+    }
+
+    // =====================================================
+    // COUNT
+    // =====================================================
+
+    const countSql = `
+      SELECT COUNT(*) AS total
+      FROM products
+      ${where}
     `;
 
-    const searchValue = `%${search}%`;
+    db.query(countSql, values, (countErr, countResults) => {
+      if (countErr) {
+        console.error("COUNT PRODUCTS ERROR:", countErr);
+        return callback(countErr);
+      }
 
-    values.push(
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-    );
-  }
+      const total = Number(countResults?.[0]?.total || 0);
 
-  // ===================================================
-  // CATEGORY
-  // ===================================================
+      // =====================================================
+      // PRODUCTS
+      // =====================================================
 
-  if (category) {
-    if (where) {
-      where += " AND category = ?";
-    } else {
-      where += " WHERE category = ?";
-    }
+      /*
+        IMPORTANT:
+        LIMIT and OFFSET are directly inserted as validated
+        integers instead of using ? placeholders.
+      */
 
-    values.push(category);
-  }
+      const safeLimit = Number(limit);
+      const safeOffset = Number(offset);
 
-  // ===================================================
-  // COUNT
-  // ===================================================
-
-  const countSql = `
-    SELECT COUNT(*) AS total
-    FROM products
-    ${where}
-  `;
-
-  db.query(countSql, values, (countErr, countResults) => {
-    if (countErr) {
-      return callback(countErr);
-    }
-
-    const total =
-      countResults && countResults[0] ? Number(countResults[0].total) : 0;
-
-    // ================================================
-    // PRODUCTS
-    // ================================================
-
-    const sql = `
+      const sql = `
         SELECT *
         FROM products
         ${where}
         ORDER BY id DESC
-        LIMIT ? OFFSET ?
+        LIMIT ${safeLimit} OFFSET ${safeOffset}
       `;
 
-    const productValues = [...values, Number(limit), Number(offset)];
+      db.query(sql, values, (err, results) => {
+        if (err) {
+          console.error("GET PRODUCTS ERROR:", err);
+          return callback(err);
+        }
 
-    db.query(sql, productValues, (err, results) => {
-      if (err) {
-        return callback(err);
-      }
-
-      return callback(null, {
-        results,
-        total,
+        return callback(null, {
+          results: results || [],
+          total,
+        });
       });
     });
-  });
+  } catch (error) {
+    console.error("PRODUCT MODEL ERROR:", error);
+    callback(error);
+  }
 };
 
 // =====================================================
@@ -116,7 +135,11 @@ const getProductsPaginated = (
 // =====================================================
 
 const getProductById = (id, callback) => {
-  const sql = "SELECT * FROM products WHERE id = ?";
+  const sql = `
+    SELECT *
+    FROM products
+    WHERE id = ?
+  `;
 
   db.query(sql, [id], callback);
 };
@@ -206,7 +229,10 @@ const updateProduct = (id, productData, callback) => {
 // =====================================================
 
 const deleteProduct = (id, callback) => {
-  const sql = "DELETE FROM products WHERE id = ?";
+  const sql = `
+    DELETE FROM products
+    WHERE id = ?
+  `;
 
   db.query(sql, [id], callback);
 };

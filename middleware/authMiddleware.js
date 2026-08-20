@@ -1,36 +1,97 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "defaultsecret";
+// ==========================================
+// AUTHENTICATE
+// ==========================================
 
 const authenticate = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ message: "Authentication token is required." });
-  }
+  try {
+    const authHeader = req.headers.authorization;
 
-  const token = authHeader.split(" ")[1];
-
-  jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) {
-      return res.status(401).json({ message: "Invalid or expired token." });
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        message: "Authorization token is required",
+      });
     }
 
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : authHeader;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Token not found",
+      });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "defaultsecret"
+    );
+
     req.user = decoded;
+
     next();
-  });
+  } catch (error) {
+    console.error("AUTH ERROR:", error.message);
+
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired token",
+    });
+  }
 };
 
-const authorize = (...allowedRoles) => (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ message: "Unauthorized." });
-  }
+// ==========================================
+// AUTHORIZE
+// ==========================================
 
-  if (!allowedRoles.includes(req.user.role)) {
-    return res.status(403).json({ message: "Forbidden." });
-  }
+const authorize = (...allowedRoles) => {
+  return (req, res, next) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: "User authentication required",
+        });
+      }
 
-  next();
+      const userRole =
+        req.user.role ||
+        req.user.userRole ||
+        req.user.user_role;
+
+      if (!userRole) {
+        return res.status(403).json({
+          success: false,
+          message: "User role not found",
+        });
+      }
+
+      if (!allowedRoles.includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied",
+        });
+      }
+
+      next();
+    } catch (error) {
+      console.error("AUTHORIZE ERROR:", error);
+
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+  };
 };
+
+// ==========================================
+// EXPORT
+// ==========================================
 
 module.exports = {
   authenticate,

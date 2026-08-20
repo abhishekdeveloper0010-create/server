@@ -11,9 +11,9 @@ async function sendTestEmail() {
       text: "Gmail OAuth2 is working successfully!",
     });
 
-    // console.log("Email sent successfully:", info.messageId);
+    console.log("Email sent successfully:", info.messageId);
   } catch (error) {
-    // console.error("Email error:", error);
+    console.error("Email error:", error);
   }
 }
 

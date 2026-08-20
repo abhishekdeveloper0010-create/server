@@ -10,104 +10,172 @@ const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const newsletterRoutes = require("./routes/newsletterRoutes");
-
-const app = express();
+const addressRoutes = require("./routes/addressRoutes");
+const orderRoutes = require("./routes/orderRoutes");
 
 const { google } = require("googleapis");
 
-// ==============================
-// OAUTH2 CALLBACK
-// ==============================
+const app = express();
 
-app.get("/oauth2callback", async (req, res) => {
-  try {
-    const { code } = req.query;
+const PORT =
+  process.env.PORT || 4000;
 
-    if (!code) {
-      return res.status(400).send("Authorization code is missing.");
-    }
-
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
-      "http://localhost:4000/oauth2callback",
-    );
-
-    const { tokens } = await oauth2Client.getToken(code);
-
-    console.log("\n==============================");
-    console.log("REFRESH TOKEN:");
-    console.log(tokens.refresh_token);
-    console.log("==============================\n");
-
-    res.send("Google authorization successful. Check your terminal.");
-  } catch (error) {
-    console.error("OAuth Error:", error.response?.data || error.message);
-
-    res.status(500).send("OAuth authorization failed");
-  }
-});
-
-// ==============================
-// PORT
-// ==============================
-
-const PORT = process.env.PORT || 4000;
-
-// ==============================
+// =====================================================
 // MIDDLEWARE
-// ==============================
+// =====================================================
 
-app.use(cors({ origin: "*" }));
+app.use(
+  cors({
+    origin: "*",
+  })
+);
 
 app.use(express.json());
 
-// ==============================
-// API ROUTES
-// ==============================
+// =====================================================
+// OAUTH CALLBACK
+// =====================================================
 
-// AUTH
-app.use("/api/auth", authRoutes);
+app.get(
+  "/oauth2callback",
+  async (req, res) => {
+    try {
+      const { code } = req.query;
 
-// PRODUCTS
-app.use("/api/products", productRoutes);
+      if (!code) {
+        return res
+          .status(400)
+          .send(
+            "Authorization code is missing."
+          );
+      }
 
-// CATEGORIES
-app.use("/api/categories", categoryRoutes);
+      const oauth2Client =
+        new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET,
+          "http://localhost:4000/oauth2callback"
+        );
 
-// CONTACT
-app.use("/api/contact", contactRoutes);
+      const { tokens } =
+        await oauth2Client.getToken(code);
 
-// NEWSLETTER
-app.use("/api/newsletter", newsletterRoutes);
+      console.log(
+        "\n=============================="
+      );
 
-// ==============================
+      console.log("REFRESH TOKEN:");
+
+      console.log(
+        tokens.refresh_token
+      );
+
+      console.log(
+        "==============================\n"
+      );
+
+      res.send(
+        "Google authorization successful. Check your terminal."
+      );
+    } catch (error) {
+      console.error(
+        "OAuth Error:",
+        error.response?.data ||
+          error.message
+      );
+
+      res
+        .status(500)
+        .send(
+          "OAuth authorization failed"
+        );
+    }
+  }
+);
+
+// =====================================================
+// ROUTES
+// =====================================================
+
+app.use(
+  "/api/auth",
+  authRoutes
+);
+
+app.use(
+  "/api/products",
+  productRoutes
+);
+
+app.use(
+  "/api/categories",
+  categoryRoutes
+);
+
+app.use(
+  "/api/contact",
+  contactRoutes
+);
+
+app.use(
+  "/api/newsletter",
+  newsletterRoutes
+);
+
+app.use(
+  "/api/addresses",
+  addressRoutes
+);
+
+app.use(
+  "/api/orders",
+  orderRoutes
+);
+
+// =====================================================
 // PRODUCT IMAGES
-// ==============================
+// =====================================================
 
-app.use("/images", express.static(path.join(__dirname, "uploads/products")));
+app.use(
+  "/images",
+  express.static(
+    path.join(
+      __dirname,
+      "uploads/products"
+    )
+  )
+);
 
-// ==============================
+// =====================================================
 // CATEGORY IMAGES
-// ==============================
+// =====================================================
 
 app.use(
   "/category-images",
-  express.static(path.join(__dirname, "uploads/categories")),
+  express.static(
+    path.join(
+      __dirname,
+      "uploads/categories"
+    )
+  )
 );
 
-// ==============================
+// =====================================================
 // TEST
-// ==============================
+// =====================================================
 
 app.get("/", (req, res) => {
-  res.send("Apple Blossom Server Running");
+  res.send(
+    "Apple Blossom Server Running"
+  );
 });
 
-// ==============================
+// =====================================================
 // START SERVER
-// ==============================
+// =====================================================
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(
+    `Server running on http://localhost:${PORT}`
+  );
 });

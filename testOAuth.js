@@ -14,11 +14,11 @@ async function testOAuth() {
             refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
         });
         const {token} = await oauth2Client.getAccessToken();
-    //     console.log("ACCESS TOKEN GENERATED", token);
-    //   console.log(token ? "OAuth2 is working!" : "No token received");
+        console.log("ACCESS TOKEN GENERATED", token);
+      console.log(token ? "OAuth2 is working!" : "No token received");
 
     } catch (error) {
-        // console.error("OAuth2 Error:", error);
+        console.error("OAuth2 Error:", error);
     }
 }
 

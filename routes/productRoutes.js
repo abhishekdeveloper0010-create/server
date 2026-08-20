@@ -1,22 +1,68 @@
 const express = require("express");
+
 const router = express.Router();
 
 const productController = require("../controllers/productController");
-const { authenticate, authorize } = require("../middleware/authMiddleware");
 
-// GET all products
-router.get("/", productController.getAllProducts);
+const {
+  authenticate,
+  authorize,
+} = require("../middleware/authMiddleware");
 
-// GET single product
-router.get("/:id", productController.getProductById);
+// =====================================================
+// GET ALL PRODUCTS
+// =====================================================
 
-// CREATE product (admin only)
-router.post("/", authenticate, authorize("admin"), productController.createProduct);
+router.get(
+  "/",
+  productController.getAllProducts
+);
 
-// UPDATE product (admin only)
-router.put("/:id", authenticate, authorize("admin"), productController.updateProduct);
+// =====================================================
+// GET SINGLE PRODUCT
+// IMPORTANT:
+// This must come after "/" and before admin routes
+// =====================================================
 
-// DELETE product (admin only)
-router.delete("/:id", authenticate, authorize("admin"), productController.deleteProduct);
+router.get(
+  "/:id",
+  productController.getProductById
+);
+
+// =====================================================
+// CREATE PRODUCT
+// ADMIN ONLY
+// =====================================================
+
+router.post(
+  "/",
+  authenticate,
+  authorize("admin"),
+  productController.createProduct
+);
+
+// =====================================================
+// UPDATE PRODUCT
+// ADMIN ONLY
+// =====================================================
+
+router.put(
+  "/:id",
+  authenticate,
+  authorize("admin"),
+  productController.updateProduct
+);
+
+// =====================================================
+// DELETE PRODUCT
+// ADMIN ONLY
+// =====================================================
+
+router.delete(
+  "/:id",
+  authenticate,
+  authorize("admin"),
+  productController.deleteProduct
+);
 
 module.exports = router;
