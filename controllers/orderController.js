@@ -23,6 +23,38 @@ const getUserId = (req) => {
 };
 
 // =====================================================
+// HELPER: EXPECTED DELIVERY DATE
+// Default: 8 days from order date
+// Example:
+// Order Placed: 20 August
+// Expected Delivery: 28 August
+// =====================================================
+
+const getExpectedDeliveryDate = () => {
+  const date = new Date();
+
+  date.setDate(date.getDate() + 8);
+
+  return date.toISOString().split("T")[0];
+};
+
+// =====================================================
+// HELPER: FORMAT DATE ONLY
+// YYYY-MM-DD -> 28 August
+// =====================================================
+
+const formatDateOnly = (date) => {
+  if (!date) return null;
+
+  const d = new Date(date);
+
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "long",
+  });
+};
+
+// =====================================================
 // CREATE ORDER
 // POST /api/orders
 // =====================================================
@@ -31,12 +63,11 @@ exports.placeOrder = async (req, res) => {
   let connection;
 
   try {
-    const userId = getUserId(req);
+    // =================================================
+    // USER
+    // =================================================
 
-    console.log("=================================");
-    console.log("CREATE ORDER USER:", userId);
-    console.log("ORDER BODY:", req.body);
-    console.log("=================================");
+    const userId = getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
@@ -44,6 +75,10 @@ exports.placeOrder = async (req, res) => {
         message: "User authentication required",
       });
     }
+
+    // =================================================
+    // BODY
+    // =================================================
 
     const {
       items,
@@ -89,8 +124,8 @@ exports.placeOrder = async (req, res) => {
     const finalTotalAmount =
       Number(
         totalAmount ??
-          total ??
-          finalSubtotal + finalDeliveryCharge
+        total ??
+        finalSubtotal + finalDeliveryCharge
       );
 
     // =================================================
@@ -110,10 +145,14 @@ exports.placeOrder = async (req, res) => {
       )}`;
 
     // =================================================
+    // EXPECTED DELIVERY DATE
+    // =================================================
+
+    const expectedDeliveryDate =
+      getExpectedDeliveryDate();
+
+    // =================================================
     // DATABASE CONNECTION
-    // IMPORTANT:
-    // db.js uses mysql.createConnection()
-    // So DO NOT use db.getConnection()
     // =================================================
 
     connection = db.promise();
@@ -133,12 +172,24 @@ exports.placeOrder = async (req, res) => {
       {
         orderNumber,
         userId,
+
         status: "Order Placed",
+
+        expectedDeliveryDate,
+
         subtotal: finalSubtotal,
-        deliveryCharge: finalDeliveryCharge,
-        totalAmount: finalTotalAmount,
-        paymentMethod: finalPaymentMethod,
-        addressId: finalAddressId,
+
+        deliveryCharge:
+          finalDeliveryCharge,
+
+        totalAmount:
+          finalTotalAmount,
+
+        paymentMethod:
+          finalPaymentMethod,
+
+        addressId:
+          finalAddressId,
       }
     );
 
@@ -190,16 +241,49 @@ exports.placeOrder = async (req, res) => {
       const color =
         item.color || null;
 
+      // -----------------------------------------------
+      // BASIC VALIDATION
+      // -----------------------------------------------
+
+      if (!productId) {
+        throw new Error(
+          "Product ID is required"
+        );
+      }
+
+      if (quantity <= 0) {
+        throw new Error(
+          "Product quantity must be greater than 0"
+        );
+      }
+
+      if (price < 0) {
+        throw new Error(
+          "Product price cannot be negative"
+        );
+      }
+
+      // -----------------------------------------------
+      // CREATE ITEM
+      // -----------------------------------------------
+
       await createOrderItem(
         connection,
         {
           orderId,
+
           productId,
+
           productName,
+
           productImage,
+
           price,
+
           quantity,
+
           size,
+
           color,
         }
       );
@@ -213,7 +297,10 @@ exports.placeOrder = async (req, res) => {
       connection,
       {
         orderId,
-        status: "Order Placed",
+
+        status:
+          "Order Placed",
+
         message:
           "Your order has been successfully placed.",
       }
@@ -225,19 +312,15 @@ exports.placeOrder = async (req, res) => {
 
     await connection.commit();
 
-    console.log(
-      "ORDER CREATED:",
-      orderId,
-      orderNumber
-    );
-
     // =================================================
     // RESPONSE
     // =================================================
 
     return res.status(201).json({
       success: true,
-      message: "Order placed successfully",
+
+      message:
+        "Order placed successfully",
 
       order: {
         id: orderId,
@@ -286,11 +369,24 @@ exports.placeOrder = async (req, res) => {
 
         address_id:
           finalAddressId,
+
+        // ---------------------------------------------
+        // EXPECTED DELIVERY
+        // ---------------------------------------------
+
+        expectedDeliveryDate:
+          expectedDeliveryDate,
+
+        expected_delivery_date:
+          expectedDeliveryDate,
+
+        expectedDeliveryDateFormatted:
+          formatDateOnly(
+            expectedDeliveryDate
+          ),
       },
     });
-
   } catch (error) {
-
     // =================================================
     // ROLLBACK
     // =================================================
@@ -313,15 +409,13 @@ exports.placeOrder = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to place order",
-      error: error.message,
+
+      message:
+        "Failed to place order",
+
+      error:
+        error.message,
     });
-
-  } finally {
-
-    // IMPORTANT:
-    // mysql.createConnection() does NOT have release()
-    // So nothing is required here.
   }
 };
 
@@ -330,49 +424,46 @@ exports.placeOrder = async (req, res) => {
 // GET /api/orders/my-orders
 // =====================================================
 
-exports.getMyOrders = async (req, res) => {
+exports.getMyOrders = async (
+  req,
+  res
+) => {
   try {
-    const userId = getUserId(req);
+    // =================================================
+    // USER
+    // =================================================
 
-    console.log("=================================");
-    console.log(
-      "GET MY ORDERS USER ID:",
-      userId
-    );
-    console.log("=================================");
+    const userId =
+      getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
         success: false,
+
         message:
           "User authentication required",
       });
     }
 
+    // =================================================
+    // GET ORDERS
+    // =================================================
+
     const orders =
-      await getUserOrders(userId);
+      await getUserOrders(
+        userId
+      );
 
-    console.log(
-      "ORDERS RETURNED:",
-      orders.length
-    );
-
-    console.log(
-      "ORDERS FROM SERVER:",
-      JSON.stringify(
-        orders,
-        null,
-        2
-      )
-    );
+    // =================================================
+    // RESPONSE
+    // =================================================
 
     return res.status(200).json({
       success: true,
+
       orders,
     });
-
   } catch (error) {
-
     console.error(
       "GET MY ORDERS ERROR:",
       error
@@ -380,8 +471,10 @@ exports.getMyOrders = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message:
         "Failed to load orders",
+
       error:
         error.message,
     });
@@ -393,95 +486,49 @@ exports.getMyOrders = async (req, res) => {
 // GET /api/orders/:id
 // =====================================================
 
-exports.getOrder = async (req, res) => {
+exports.getOrder = async (
+  req,
+  res
+) => {
   try {
-    const userId = getUserId(req);
+    // =================================================
+    // USER
+    // =================================================
+
+    const userId =
+      getUserId(req);
+
+    // =================================================
+    // ORDER ID
+    // =================================================
 
     const orderId =
       Number(req.params.id);
 
+    // =================================================
+    // VALIDATE USER
+    // =================================================
+
     if (!userId) {
       return res.status(401).json({
         success: false,
+
         message:
           "User authentication required",
       });
     }
 
-    if (!orderId) {
+    // =================================================
+    // VALIDATE ORDER
+    // =================================================
+
+    if (
+      !orderId ||
+      Number.isNaN(orderId)
+    ) {
       return res.status(400).json({
         success: false,
-        message:
-          "Invalid order ID",
-      });
-    }
 
-    const order =
-      await getUserOrderById(
-        userId,
-        orderId
-      );
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Order not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      order,
-    });
-
-  } catch (error) {
-
-    console.error(
-      "GET SINGLE ORDER ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Failed to load order",
-      error:
-        error.message,
-    });
-  }
-};
-
-// =====================================================
-// CANCEL ORDER
-// POST /api/orders/:id/cancel
-// =====================================================
-
-exports.cancelOrder = async (req, res) => {
-  let connection;
-
-  try {
-    const userId = getUserId(req);
-
-    const orderId =
-      Number(req.params.id);
-
-    const reason =
-      req.body?.reason ||
-      req.body?.cancellationReason ||
-      "Changed my mind";
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "User authentication required",
-      });
-    }
-
-    if (!orderId) {
-      return res.status(400).json({
-        success: false,
         message:
           "Invalid order ID",
       });
@@ -497,45 +544,170 @@ exports.cancelOrder = async (req, res) => {
         orderId
       );
 
+    // =================================================
+    // NOT FOUND
+    // =================================================
+
     if (!order) {
       return res.status(404).json({
         success: false,
+
         message:
           "Order not found",
       });
     }
 
     // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
+      success: true,
+
+      order,
+    });
+  } catch (error) {
+    console.error(
+      "GET SINGLE ORDER ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+
+      message:
+        "Failed to load order",
+
+      error:
+        error.message,
+    });
+  }
+};
+
+// =====================================================
+// CANCEL ORDER
+// POST /api/orders/:id/cancel
+// =====================================================
+
+exports.cancelOrder = async (
+  req,
+  res
+) => {
+  let connection;
+
+  try {
+    // =================================================
+    // USER
+    // =================================================
+
+    const userId =
+      getUserId(req);
+
+    // =================================================
+    // ORDER ID
+    // =================================================
+
+    const orderId =
+      Number(req.params.id);
+
+    // =================================================
+    // REASON
+    // =================================================
+
+    const reason =
+      req.body?.reason ||
+      req.body?.cancellationReason ||
+      "Changed my mind";
+
+    // =================================================
+    // VALIDATE USER
+    // =================================================
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+
+        message:
+          "User authentication required",
+      });
+    }
+
+    // =================================================
+    // VALIDATE ORDER
+    // =================================================
+
+    if (
+      !orderId ||
+      Number.isNaN(orderId)
+    ) {
+      return res.status(400).json({
+        success: false,
+
+        message:
+          "Invalid order ID",
+      });
+    }
+
+    // =================================================
+    // GET ORDER
+    // =================================================
+
+    const order =
+      await getUserOrderById(
+        userId,
+        orderId
+      );
+
+    // =================================================
+    // ORDER NOT FOUND
+    // =================================================
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+
+        message:
+          "Order not found",
+      });
+    }
+
+    // =================================================
+    // CANCELABLE STATUSES
+    // =================================================
+
+    const cancelableStatuses = [
+      "Order Placed",
+      "Confirmed",
+      "Packed",
+    ];
+
+    // =================================================
     // CANCEL RULE
     // =================================================
 
-    const nonCancelableStatuses = [
-      "Cancelled",
-      "Delivered",
-      "Shipped",
-      "Out for Delivery",
-      "Return Requested",
-    ];
-
     if (
-      nonCancelableStatuses.includes(
+      !cancelableStatuses.includes(
         order.status
       )
     ) {
       return res.status(400).json({
         success: false,
+
         message:
           `Order cannot be cancelled when status is "${order.status}"`,
       });
     }
 
     // =================================================
-    // DATABASE CONNECTION
-    // IMPORTANT:
-    // db.getConnection() NOT AVAILABLE
+    // DATABASE
     // =================================================
 
-    connection = db.promise();
+    connection =
+      db.promise();
+
+    // =================================================
+    // START TRANSACTION
+    // =================================================
 
     await connection.beginTransaction();
 
@@ -543,23 +715,37 @@ exports.cancelOrder = async (req, res) => {
     // UPDATE ORDER
     // =================================================
 
-    await connection.execute(
-      `
-        UPDATE orders
-        SET
-          status = 'Cancelled',
-          cancellation_reason = ?,
-          cancelled_at = NOW(),
-          updated_at = NOW()
-        WHERE id = ?
-        AND user_id = ?
-      `,
-      [
-        reason,
-        orderId,
-        userId,
-      ]
-    );
+    const [orderUpdate] =
+      await connection.execute(
+        `
+          UPDATE orders
+          SET
+            status = 'Cancelled',
+            cancellation_reason = ?,
+            cancelled_at = NOW(),
+            updated_at = NOW()
+          WHERE
+            id = ?
+            AND user_id = ?
+        `,
+        [
+          reason,
+          orderId,
+          userId,
+        ]
+      );
+
+    // =================================================
+    // VERIFY UPDATE
+    // =================================================
+
+    if (
+      orderUpdate.affectedRows === 0
+    ) {
+      throw new Error(
+        "Order could not be cancelled"
+      );
+    }
 
     // =================================================
     // UPDATE ITEMS
@@ -568,21 +754,26 @@ exports.cancelOrder = async (req, res) => {
     await connection.execute(
       `
         UPDATE order_items
-        SET status = 'Cancelled'
-        WHERE order_id = ?
+        SET
+          status = 'Cancelled'
+        WHERE
+          order_id = ?
       `,
       [orderId]
     );
 
     // =================================================
-    // HISTORY
+    // STATUS HISTORY
     // =================================================
 
     await createStatusHistory(
       connection,
       {
         orderId,
-        status: "Cancelled",
+
+        status:
+          "Cancelled",
+
         message:
           `Order cancelled by customer. Reason: ${reason}`,
       }
@@ -594,18 +785,28 @@ exports.cancelOrder = async (req, res) => {
 
     await connection.commit();
 
-    return res.json({
+    // =================================================
+    // RESPONSE
+    // =================================================
+
+    return res.status(200).json({
       success: true,
+
       message:
         "Order cancelled successfully",
+
       orderId,
+
       status:
         "Cancelled",
+
       cancellationReason:
         reason,
     });
-
   } catch (error) {
+    // =================================================
+    // ROLLBACK
+    // =================================================
 
     if (connection) {
       try {
@@ -625,16 +826,13 @@ exports.cancelOrder = async (req, res) => {
 
     return res.status(500).json({
       success: false,
+
       message:
         "Failed to cancel order",
+
       error:
         error.message,
     });
-
-  } finally {
-
-    // mysql.createConnection()
-    // does not support release()
   }
 };
 
@@ -647,63 +845,146 @@ exports.returnOrderItem = async (
   req,
   res
 ) => {
+  let connection;
+
   try {
+    // =================================================
+    // USER
+    // =================================================
+
     const userId =
       getUserId(req);
 
+    // =================================================
+    // IDS
+    // =================================================
+
     const orderId =
-      Number(req.params.orderId);
+      Number(
+        req.params.orderId
+      );
 
     const itemId =
-      Number(req.params.itemId);
+      Number(
+        req.params.itemId
+      );
+
+    // =================================================
+    // REASON
+    // =================================================
 
     const reason =
-      req.body?.reason;
+      req.body?.reason?.trim();
+
+    // =================================================
+    // VALIDATE USER
+    // =================================================
 
     if (!userId) {
       return res.status(401).json({
         success: false,
+
         message:
           "User authentication required",
       });
     }
 
-    if (!orderId || !itemId) {
+    // =================================================
+    // VALIDATE IDS
+    // =================================================
+
+    if (
+      !orderId ||
+      Number.isNaN(orderId) ||
+      !itemId ||
+      Number.isNaN(itemId)
+    ) {
       return res.status(400).json({
         success: false,
+
         message:
           "Invalid order or item ID",
       });
     }
 
+    // =================================================
+    // VALIDATE REASON
+    // =================================================
+
     if (!reason) {
       return res.status(400).json({
         success: false,
+
         message:
           "Return reason is required",
       });
     }
 
+    // =================================================
+    // DATABASE CONNECTION
+    // =================================================
+
+    connection =
+      db.promise();
+
+    // =================================================
+    // START TRANSACTION
+    // =================================================
+
+    await connection.beginTransaction();
+
+    // =================================================
+    // REQUEST RETURN
+    // =================================================
+
     const result =
       await requestReturn(
-        null,
+        connection,
         {
           userId,
+
           orderId,
+
           itemId,
+
           reason,
         }
       );
 
+    // =================================================
+    // COMMIT
+    // =================================================
+
+    await connection.commit();
+
+    // =================================================
+    // RESPONSE
+    // =================================================
+
     return res.status(200).json({
       success: true,
+
       message:
         "Return request submitted successfully",
+
       returnRequest:
         result,
     });
-
   } catch (error) {
+    // =================================================
+    // ROLLBACK
+    // =================================================
+
+    if (connection) {
+      try {
+        await connection.rollback();
+      } catch (rollbackError) {
+        console.error(
+          "ROLLBACK ERROR:",
+          rollbackError
+        );
+      }
+    }
 
     console.error(
       "RETURN ORDER ITEM ERROR:",
@@ -712,9 +993,31 @@ exports.returnOrderItem = async (
 
     return res.status(400).json({
       success: false,
+
       message:
         error.message ||
         "Failed to request return",
     });
   }
+};
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
+module.exports = {
+  placeOrder:
+    exports.placeOrder,
+
+  getMyOrders:
+    exports.getMyOrders,
+
+  getOrder:
+    exports.getOrder,
+
+  cancelOrder:
+    exports.cancelOrder,
+
+  returnOrderItem:
+    exports.returnOrderItem,
 };

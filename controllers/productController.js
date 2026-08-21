@@ -19,22 +19,35 @@ exports.getAllProducts = (req, res) => {
     req.query.search || ""
   ).trim();
 
-  const category = String(
-    req.query.category || ""
-  ).trim();
+  // CATEGORY ID
+  const categoryId = req.query.category_id
+    ? Number(req.query.category_id)
+    : null;
+
+  // Validate category ID
+  if (
+    categoryId !== null &&
+    (!Number.isInteger(categoryId) ||
+      categoryId <= 0)
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid category ID",
+    });
+  }
 
   console.log("GET PRODUCTS:", {
     page,
     limit,
     search,
-    category,
+    categoryId,
   });
 
   Product.getProductsPaginated(
     page,
     limit,
     search,
-    category,
+    categoryId,
     (err, data) => {
       if (err) {
         console.error(
@@ -62,20 +75,13 @@ exports.getAllProducts = (req, res) => {
 
       return res.status(200).json({
         success: true,
-
         data: results,
-
         page,
-
         limit,
-
         total,
-
         totalPages,
-
         search,
-
-        category,
+        category_id: categoryId,
       });
     }
   );

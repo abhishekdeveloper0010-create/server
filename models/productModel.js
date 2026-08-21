@@ -15,119 +15,139 @@ const getProducts = (callback) => {
 };
 
 // =====================================================
-// GET PRODUCTS PAGINATED + SEARCH + CATEGORY
+// GET PRODUCTS PAGINATED + SEARCH + CATEGORY ID
 // =====================================================
 
-const getProductsPaginated = async (
+const getProductsPaginated = (
   page = 1,
   limit = 8,
   search = "",
-  category = "",
-  callback,
+  categoryId = null,
+  callback
 ) => {
-  try {
-    page = Math.max(1, parseInt(page, 10) || 1);
-    limit = Math.max(1, parseInt(limit, 10) || 8);
+  page = Math.max(
+    1,
+    parseInt(page, 10) || 1
+  );
 
-    const offset = (page - 1) * limit;
+  limit = Math.max(
+    1,
+    parseInt(limit, 10) || 8
+  );
 
-    let where = "";
-    const values = [];
+  const offset = (page - 1) * limit;
 
-    // =====================================================
-    // SEARCH
-    // =====================================================
+  let where = "";
+  const values = [];
 
-    if (search) {
-      where = `
-        WHERE
-          title LIKE ?
-          OR description LIKE ?
-          OR category LIKE ?
-          OR subcategory LIKE ?
-          OR brand LIKE ?
-      `;
+  // ===================================================
+  // SEARCH
+  // ===================================================
 
-      const searchValue = `%${search}%`;
-
-      values.push(
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-      );
-    }
-
-    // =====================================================
-    // CATEGORY
-    // =====================================================
-
-    if (category && category !== "All") {
-      if (where) {
-        where += ` AND category = ?`;
-      } else {
-        where = ` WHERE category = ?`;
-      }
-
-      values.push(category);
-    }
-
-    // =====================================================
-    // COUNT
-    // =====================================================
-
-    const countSql = `
-      SELECT COUNT(*) AS total
-      FROM products
-      ${where}
+  if (search) {
+    where = `
+      WHERE
+        name LIKE ?
+        OR description LIKE ?
+        OR category LIKE ?
     `;
 
-    db.query(countSql, values, (countErr, countResults) => {
+    const searchValue = `%${search}%`;
+
+    values.push(
+      searchValue,
+      searchValue,
+      searchValue
+    );
+  }
+
+  // ===================================================
+  // CATEGORY ID
+  // ===================================================
+
+  if (
+    categoryId !== null &&
+    categoryId !== "" &&
+    Number.isInteger(Number(categoryId))
+  ) {
+    if (where) {
+      where += `
+        AND category_id = ?
+      `;
+    } else {
+      where = `
+        WHERE category_id = ?
+      `;
+    }
+
+    values.push(Number(categoryId));
+  }
+
+  // ===================================================
+  // COUNT
+  // ===================================================
+
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM products
+    ${where}
+  `;
+
+  db.query(
+    countSql,
+    values,
+    (countErr, countResults) => {
       if (countErr) {
-        console.error("COUNT PRODUCTS ERROR:", countErr);
+        console.error(
+          "COUNT PRODUCTS ERROR:",
+          countErr
+        );
+
         return callback(countErr);
       }
 
-      const total = Number(countResults?.[0]?.total || 0);
+      const total = Number(
+        countResults?.[0]?.total || 0
+      );
 
-      // =====================================================
+      // =================================================
       // PRODUCTS
-      // =====================================================
-
-      /*
-        IMPORTANT:
-        LIMIT and OFFSET are directly inserted as validated
-        integers instead of using ? placeholders.
-      */
+      // =================================================
 
       const safeLimit = Number(limit);
       const safeOffset = Number(offset);
 
       const sql = `
-        SELECT *
+        SELECT
+          *
         FROM products
         ${where}
         ORDER BY id DESC
-        LIMIT ${safeLimit} OFFSET ${safeOffset}
+        LIMIT ${safeLimit}
+        OFFSET ${safeOffset}
       `;
 
-      db.query(sql, values, (err, results) => {
-        if (err) {
-          console.error("GET PRODUCTS ERROR:", err);
-          return callback(err);
-        }
+      db.query(
+        sql,
+        values,
+        (err, results) => {
+          if (err) {
+            console.error(
+              "GET PRODUCTS ERROR:",
+              err
+            );
 
-        return callback(null, {
-          results: results || [],
-          total,
-        });
-      });
-    });
-  } catch (error) {
-    console.error("PRODUCT MODEL ERROR:", error);
-    callback(error);
-  }
+            return callback(err);
+          }
+
+          return callback(null, {
+            results: results || [],
+            total,
+          });
+        }
+      );
+    }
+  );
 };
 
 // =====================================================
